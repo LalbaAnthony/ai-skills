@@ -37,5 +37,3 @@ npx -y skills add . --list                                              # what n
 ## Unverified behavior
 
 - Whether a `"source": "./"` entry loads only the skills in its `skills` array, rather than all of `skills/`, has not been confirmed (`claude plugin details` only works on enabled plugins). If it loads all of `skills/`, every plugin exposes every skill.
-- Whether `claude plugin validate .` runs without authentication in CI.
-- Whether `npx skills add . --list` exits 0 in a non-interactive CI runner (it was only run locally, where it detects Claude Code as the calling agent).
