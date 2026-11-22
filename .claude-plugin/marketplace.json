@@ -1,0 +1,18 @@
+{
+    "name": "ai-skills",
+    "description": "Agent Skills for coding agents, written in this repository",
+    "owner": {
+        "name": "Anthony Lalba",
+        "email": "anthony.lalba@proton.me"
+    },
+    "plugins": [
+        {
+            "name": "version-control",
+            "description": "Git usage for coding agents",
+            "source": "./",
+            "skills": [
+                "./skills/git"
+            ]
+        }
+    ]
+}

@@ -1,0 +1,9 @@
+---
+name: skill-name
+description: What the skill does and when to use it, with the keywords that should trigger it.
+license: MIT
+---
+
+# Skill title
+
+Instructions for the agent.
