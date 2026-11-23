@@ -21,6 +21,14 @@
             "skills": [
                 "./skills/outlook-msg"
             ]
+        },
+        {
+            "name": "ci",
+            "description": "CI/CD pipeline conventions for coding agents",
+            "source": "./",
+            "skills": [
+                "./skills/github-actions"
+            ]
         }
     ]
 }
