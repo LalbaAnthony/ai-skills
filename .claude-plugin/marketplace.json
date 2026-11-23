@@ -13,6 +13,14 @@
             "skills": [
                 "./skills/git"
             ]
+        },
+        {
+            "name": "email",
+            "description": "Reading and analyzing email files",
+            "source": "./",
+            "skills": [
+                "./skills/outlook-msg"
+            ]
         }
     ]
 }
