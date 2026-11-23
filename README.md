@@ -22,6 +22,24 @@ claude plugin install <plugin> --marketplace LalbaAnthony/ai-skills
 
 Inside a session: `/plugin install <plugin> --marketplace LalbaAnthony/ai-skills`. This works in one step on Claude Code 2.1.275 or later; on older versions, run `claude plugin marketplace add LalbaAnthony/ai-skills` first, then `claude plugin install <plugin>@ai-skills`.
 
+To declare the marketplace in a settings file instead, add it to `extraKnownMarketplaces` in `~/.claude/settings.json` (current user) or in a project's `.claude/settings.json` (collaborators are prompted to add it when they trust the folder). `autoUpdate` refreshes the marketplace and its installed plugins at each startup:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "ai-skills": {
+      "source": {
+        "source": "github",
+        "repo": "LalbaAnthony/ai-skills"
+      },
+      "autoUpdate": true
+    }
+  }
+}
+```
+
+Plugins are then installed with `claude plugin install <plugin>@ai-skills`.
+
 Claude loads a skill when its description matches the task; it can also be invoked directly as `/<plugin>:<skill>`.
 
 ### Other agents
@@ -46,7 +64,7 @@ These directories are written by the `skills` CLI: do not edit the installed cop
 
 ## Update
 
-- Claude Code: `claude plugin marketplace update ai-skills`, then `claude plugin update <plugin>@ai-skills`. Or, per machine: `/plugin` > Marketplaces > `ai-skills` > Enable auto-update.
+- Claude Code: `claude plugin marketplace update ai-skills`, then `claude plugin update <plugin>@ai-skills`. Or, per machine: `/plugin` > Marketplaces > `ai-skills` > Enable auto-update, or `"autoUpdate": true` in settings (see [Claude Code](#claude-code)).
 - Other agents: `npx skills update -g -y`.
 
 Plugins carry no version: an update installs the latest commit of `main`.
