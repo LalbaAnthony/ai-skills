@@ -16,7 +16,12 @@ For each message `name.msg`, produces:
 A JSON manifest of everything produced is printed to stdout, so the caller
 knows exactly which files to read next.
 
-Requires: extract-msg  (pip install extract-msg --break-system-packages)
+Images are tagged in the attachment list with their format, pixel size and,
+for inline images, their Content-ID and whether they look like a logo or
+signature. Image formats that vision models generally cannot open (EMF, WMF,
+TIFF, ...) are also reported as manifest warnings.
+
+Requires: extract-msg  (python -m pip install extract-msg)
 """
 
 from __future__ import annotations
@@ -25,6 +30,7 @@ import argparse
 import html
 import json
 import re
+import struct
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
@@ -35,7 +41,8 @@ try:
 except ImportError:
     sys.stderr.write(
         "extract-msg is not installed. Run:\n"
-        "    pip install extract-msg --break-system-packages\n"
+        "    python -m pip install extract-msg\n"
+        "(add --break-system-packages if pip reports an externally-managed-environment)\n"
     )
     sys.exit(2)
 
@@ -59,6 +66,9 @@ class _HTMLToText(HTMLParser):
     def handle_starttag(self, tag, attrs):
         if tag in self.SKIP:
             self.skip_depth += 1
+        elif tag == "img":
+            if not self.skip_depth:
+                self.parts.append(self._image_placeholder(dict(attrs)))
         elif tag == "li":
             self.parts.append("\n- ")
         elif tag in ("td", "th"):
@@ -75,6 +85,20 @@ class _HTMLToText(HTMLParser):
     def handle_data(self, data):
         if not self.skip_depth:
             self.parts.append(data)
+
+    @staticmethod
+    def _image_placeholder(attrs: dict) -> str:
+        # Same [cid:...] form as the markers Outlook writes in plain-text bodies,
+        # so an image position can be matched to its attachment line either way.
+        src = (attrs.get("src") or "").strip()
+        alt = " ".join((attrs.get("alt") or "").split())
+        alt_part = f' alt="{alt}"' if alt else ""
+        if src.lower().startswith("cid:"):
+            return f"[cid:{src[4:]}{alt_part}]"
+        if alt:
+            return f"[image{alt_part}]"
+        # Remote or data: images without alt text are mostly tracking pixels and spacers.
+        return ""
 
     def text(self) -> str:
         raw = "".join(self.parts).replace("\xa0", " ")
@@ -160,6 +184,147 @@ def unique_path(directory: Path, name: str) -> Path:
 
 
 # ---------------------------------------------------------------------------
+# Image helpers
+# ---------------------------------------------------------------------------
+
+# Formats that vision-capable models generally accept. Other image formats are
+# still extracted, but flagged so the reader knows they need a conversion first.
+VIEWABLE_IMAGE_FORMATS = {"PNG", "JPEG", "GIF", "WEBP"}
+
+# Used when the file signature is not recognised.
+IMAGE_EXTENSIONS = {
+    ".png": "PNG", ".jpg": "JPEG", ".jpeg": "JPEG", ".jfif": "JPEG", ".gif": "GIF",
+    ".webp": "WEBP", ".bmp": "BMP", ".dib": "BMP", ".tif": "TIFF", ".tiff": "TIFF",
+    ".emf": "EMF", ".wmf": "WMF", ".emz": "EMZ", ".wmz": "WMZ",
+    ".heic": "HEIC", ".heif": "HEIF", ".ico": "ICO",
+}
+
+# Inline images within these bounds are tagged as likely logos or signature art.
+# Mislabelling a logo as content costs one extra image read; mislabelling a
+# screenshot as a logo hides it, so the bounds are kept small.
+DECORATIVE_MAX_WIDTH = 300
+DECORATIVE_MAX_HEIGHT = 150
+
+
+def image_format(data: bytes, name: str) -> str | None:
+    """Identify an image from its file signature, then from its extension."""
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "PNG"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "JPEG"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return "GIF"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "WEBP"
+    if data[:4] in (b"II*\x00", b"MM\x00*"):
+        return "TIFF"
+    if data[40:44] == b" EMF":
+        return "EMF"
+    if data[:4] == b"\xd7\xcd\xc6\x9a":  # placeable WMF
+        return "WMF"
+    return IMAGE_EXTENSIONS.get(Path(name).suffix.lower())
+
+
+def image_size(data: bytes, fmt: str) -> tuple[int, int] | None:
+    """Return (width, height) in pixels read from the image header, or None."""
+    try:
+        if fmt == "PNG" and data[12:16] == b"IHDR":
+            return struct.unpack(">II", data[16:24])
+        if fmt == "GIF":
+            return struct.unpack("<HH", data[6:10])
+        if fmt == "BMP" and data[:2] == b"BM":
+            (header_size,) = struct.unpack("<I", data[14:18])
+            if header_size == 12:  # OS/2 BITMAPCOREHEADER
+                return struct.unpack("<HH", data[18:22])
+            width, height = struct.unpack("<ii", data[18:26])
+            return width, abs(height)  # negative height means a top-down bitmap
+        if fmt == "JPEG":
+            return _jpeg_size(data)
+    except struct.error:  # truncated header
+        return None
+    return None
+
+
+def _jpeg_size(data: bytes) -> tuple[int, int] | None:
+    # Walk the marker segments up to the first start-of-frame (SOFn), which holds the size.
+    i = 2
+    while i + 4 <= len(data):
+        if data[i] != 0xFF:
+            return None
+        marker = data[i + 1]
+        if marker == 0xFF:  # fill byte
+            i += 1
+            continue
+        if marker == 0x01 or 0xD0 <= marker <= 0xD9:  # standalone markers carry no length
+            i += 2
+            continue
+        if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+            height, width = struct.unpack(">HH", data[i + 5:i + 9])
+            return width, height
+        (length,) = struct.unpack(">H", data[i + 2:i + 4])
+        i += 2 + length
+    return None
+
+
+def is_decorative(size: tuple[int, int] | None) -> bool:
+    """True for images small enough to be a logo, icon or signature graphic."""
+    return size is not None and size[0] <= DECORATIVE_MAX_WIDTH and size[1] <= DECORATIVE_MAX_HEIGHT
+
+
+def content_id(att) -> str:
+    return (getattr(att, "contentId", None) or "").strip().strip("<>").strip()
+
+
+def body_references(msg) -> str | None:
+    """Lower-cased raw HTML and plain bodies, searched for cid: references.
+
+    Returns None when the message has neither, in which case Content-IDs
+    cannot be checked against the body.
+    """
+    parts = []
+    html_body = getattr(msg, "htmlBody", None)
+    if html_body:
+        parts.append(decode_bytes(html_body) if isinstance(html_body, bytes) else html_body)
+    plain = getattr(msg, "body", None)
+    if plain:
+        parts.append(plain)
+    return "\n".join(parts).lower() if parts else None
+
+
+def is_inline(att, body_refs: str | None) -> bool:
+    """Hidden attachments, and attachments whose Content-ID the body displays.
+
+    Some clients (Apple Mail among them) give every attachment a Content-ID, so
+    a Content-ID alone does not make an attachment inline. It is only taken at
+    face value when there is no HTML or plain body to check it against.
+    """
+    if getattr(att, "hidden", False):
+        return True
+    cid = content_id(att)
+    if not cid:
+        return False
+    if body_refs is None:
+        return True
+    return f"cid:{cid.lower()}" in body_refs
+
+
+def attachment_tags(fmt: str | None, size, inline: bool, decorative: bool, cid: str) -> str:
+    parts = []
+    if fmt:
+        parts.append("inline image" if inline else "image")
+        if decorative:
+            parts.append("likely logo or signature")
+        parts.append(f"{fmt} {size[0]}x{size[1]} px" if size else fmt)
+        if fmt not in VIEWABLE_IMAGE_FORMATS:
+            parts.append("format not viewable by most vision models")
+    elif inline:
+        parts.append("inline")
+    if inline and cid:
+        parts.append(f"`cid:{cid}`")
+    return f" _({', '.join(parts)})_" if parts else ""
+
+
+# ---------------------------------------------------------------------------
 # Message rendering
 # ---------------------------------------------------------------------------
 
@@ -225,20 +390,21 @@ def render_message(msg, args, att_dir: Path, depth: int, manifest: dict) -> str:
     if attachments:
         out.append("")
         out.append("## Attachments")
-    for index, att in enumerate(attachments, 1):
-        out.extend(render_attachment(att, index, args, att_dir, depth, manifest))
+        body_refs = body_references(msg)
+        for index, att in enumerate(attachments, 1):
+            out.extend(render_attachment(att, index, args, att_dir, depth, manifest, body_refs))
 
     return "\n".join(out)
 
 
-def render_attachment(att, index, args, att_dir: Path, depth: int, manifest: dict) -> list[str]:
+def render_attachment(att, index, args, att_dir: Path, depth: int, manifest: dict,
+                      body_refs: str | None) -> list[str]:
     lines: list[str] = []
     name = safe_name(
         getattr(att, "longFilename", None) or getattr(att, "shortFilename", None)
         or getattr(att, "displayName", None),
         f"attachment_{index}",
     )
-    inline = bool(getattr(att, "hidden", False) or getattr(att, "contentId", None))
     att_type = getattr(att, "type", None)
 
     # Embedded message: render recursively and also keep the raw .msg
@@ -254,19 +420,33 @@ def render_attachment(att, index, args, att_dir: Path, depth: int, manifest: dic
         lines.append("")
         return lines
 
-    if inline and args.skip_inline:
-        lines.append(f"- {index}. {name} _(inline image, skipped)_")
-        return lines
-
     data = getattr(att, "data", None)
     if isinstance(data, (bytes, bytearray)):
+        data = bytes(data)
+        inline = is_inline(att, body_refs)
+        fmt = image_format(data, name)
+        size = image_size(data, fmt) if fmt else None
+        decorative = inline and fmt is not None and is_decorative(size)
+
+        # --skip-inline drops logos, signature art and hidden non-image items,
+        # but keeps inline images that may be pasted screenshots.
+        if inline and args.skip_inline and (fmt is None or decorative):
+            what = "logo or signature image" if fmt else "hidden attachment"
+            lines.append(f"- {index}. {name} _(inline {what}, skipped)_")
+            return lines
+
         att_dir.mkdir(parents=True, exist_ok=True)
         target = unique_path(att_dir, name)
         target.write_bytes(data)
         manifest["attachments"].append(str(target))
         size_kb = len(data) / 1024
-        tag = " _(inline)_" if inline else ""
-        lines.append(f"- {index}. `{target.name}` ({size_kb:.1f} KB){tag} → `{target}`")
+        tags = attachment_tags(fmt, size, inline, decorative, content_id(att))
+        lines.append(f"- {index}. `{target.name}` ({size_kb:.1f} KB){tags} → `{target}`")
+        if fmt and fmt not in VIEWABLE_IMAGE_FORMATS:
+            manifest["warnings"].append(
+                f"Image {str(target)!r} is {fmt}, which most vision models cannot open: "
+                "look for a PNG or JPEG copy in the same message, or convert it before viewing"
+            )
     elif att_type == AttachmentType.WEB:
         url = getattr(att, "url", None) or getattr(att, "attachLongPathname", None)
         lines.append(f"- {index}. {name} _(cloud link)_ {url or ''}")
@@ -320,7 +500,9 @@ def main() -> int:
     parser.add_argument("--strip-quotes", action="store_true", help="cut quoted reply/forward history")
     parser.add_argument("--prefer", choices=["plain", "html"], default="plain",
                         help="body source when both exist (html keeps tables better)")
-    parser.add_argument("--skip-inline", action="store_true", help="do not save inline images (logos, signatures)")
+    parser.add_argument("--skip-inline", action="store_true",
+                        help="do not save inline logos, signature images and hidden attachments "
+                             "(larger inline images such as screenshots are kept)")
     parser.add_argument("--max-depth", type=int, default=5, help="max depth for embedded .msg recursion")
     parser.add_argument("--overwrite", action="store_true", help="overwrite existing .md instead of suffixing")
     args = parser.parse_args()
