@@ -12,8 +12,6 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    env:
-      DISABLE_TELEMETRY: '1'
     steps:
       - uses: actions/checkout@v7
 
@@ -22,13 +20,10 @@ jobs:
           node-version: lts/*
 
       - name: Catalog tests
-        run: node --test tests/*.test.mjs
-
-      - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code@2.1.330
+        run: node .github/scripts/checks.mjs tests
 
       - name: Validate the plugin marketplace
-        run: claude plugin validate .
+        run: node .github/scripts/checks.mjs marketplace
 
       - name: Check skill discovery
-        run: npx -y skills@1.9.0 add . --list
+        run: node .github/scripts/checks.mjs discovery

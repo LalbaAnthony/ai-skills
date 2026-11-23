@@ -1,0 +1,4 @@
+#!/bin/sh
+# Runs the catalog tests before each commit. Bypass once with `git commit --no-verify`.
+# Enabled per clone with `git config core.hooksPath .githooks`.
+exec node .github/scripts/checks.mjs tests

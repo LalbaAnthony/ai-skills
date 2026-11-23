@@ -59,7 +59,12 @@ Plugins carry no version: an update installs the latest commit of `main`.
 ai-skills/
 ├── .claude-plugin/
 │   └── marketplace.json        # catalog: thematic plugins, each listing its skills
+├── .githooks/
+│   ├── pre-commit              # runs the tests check
+│   └── pre-push                # runs every check
 ├── .github/
+│   ├── scripts/
+│   │   └── checks.mjs          # the checks, shared by CI and the git hooks
 │   └── workflows/
 │       └── ci.yml              # runs the checks on push and pull request
 ├── skills/
@@ -117,12 +122,19 @@ Loads the whole repository as a single session plugin named `ai-skills`: skills 
 ### Checks
 
 ```bash
-node --test tests/*.test.mjs
-claude plugin validate .
-npx skills add . --list
+node .github/scripts/checks.mjs              # all checks
+node .github/scripts/checks.mjs tests        # one check: tests, marketplace or discovery
 ```
 
-`tests/catalog.test.mjs` checks the repository against the rules above: every plugin lists its skills under `./skills/`, every skill belongs to exactly one plugin and has a valid `SKILL.md`, every folder of `skills/` is listed, and no other `SKILL.md` exists. Its fixture tests use placeholder names, so adding or removing a skill never requires updating a test. CI runs the three checks on every push and pull request to `main`.
+`tests` runs `tests/catalog.test.mjs`, which checks the repository against the rules above: every plugin lists its skills under `./skills/`, every skill belongs to exactly one plugin and has a valid `SKILL.md`, every folder of `skills/` is listed, and no other `SKILL.md` exists. Its fixture tests use placeholder names, so adding or removing a skill never requires updating a test. `marketplace` runs `claude plugin validate .` and `discovery` runs `npx skills add . --list`, both through `npx` at the versions pinned in `.github/scripts/checks.mjs`. CI runs the three checks on every push and pull request to `main`.
+
+To run them locally through git hooks (`tests` before each commit, all three before each push), enable the hooks once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+`--no-verify` skips them for one commit or push. The hooks check the working tree, not the staged or pushed content.
 
 ### Remove a skill
 

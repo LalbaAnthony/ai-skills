@@ -1,0 +1,4 @@
+#!/bin/sh
+# Runs every CI check before each push. Bypass once with `git push --no-verify`.
+# Enabled per clone with `git config core.hooksPath .githooks`.
+exec node .github/scripts/checks.mjs
