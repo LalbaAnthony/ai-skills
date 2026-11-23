@@ -118,6 +118,19 @@ const catalogCases = [
   ['non-string skill path', { catalog: catalogWith((c) => c.plugins[1].skills.push(42)) }, [/skill path 42 is not of the form/]],
   ['invalid skill name', { catalog: catalogWith((c) => c.plugins[1].skills.push('./skills/Skill_D')) }, [/invalid skill name "Skill_D"/]],
   [
+    'skill name too long',
+    { catalog: catalogWith((c) => c.plugins[1].skills.push(`./skills/skill-${'d'.repeat(59)}`)) },
+    [new RegExp(`invalid skill name "skill-d{59}"`)],
+  ],
+  [
+    'skill name at the limit',
+    {
+      catalog: catalogWith((c) => c.plugins[1].skills.push(`./skills/skill-${'d'.repeat(58)}`)),
+      files: { [`skills/skill-${'d'.repeat(58)}/SKILL.md`]: skillFile(`skill-${'d'.repeat(58)}`) },
+    },
+    [],
+  ],
+  [
     'skill listed by two plugins',
     { catalog: catalogWith((c) => c.plugins[1].skills.push('./skills/skill-a')) },
     [/skill "skill-a" is listed by plugin "plugin-a" and plugin "plugin-b", it must belong to exactly one plugin/],
@@ -162,6 +175,12 @@ const skillCases = [
   ['empty description', '---\nname: skill-a\ndescription:\n---\n', [/no "description" field/]],
   ['description too long', `---\nname: skill-a\ndescription: ${'x'.repeat(1025)}\n---\n`, [/description is 1025 characters, max 1024/]],
   ['description at the limit', `---\nname: skill-a\ndescription: ${'x'.repeat(1024)}\n---\n`, []],
+  ['compatibility too long', skillFile('skill-a', `compatibility: ${'x'.repeat(501)}\n`), [/compatibility is 501 characters, max 500/]],
+  ['compatibility at the limit', skillFile('skill-a', `compatibility: ${'x'.repeat(500)}\n`), []],
+  ['empty compatibility', skillFile('skill-a', 'compatibility:\n'), [/skills\/skill-a\/SKILL\.md: compatibility is empty/]],
+  ['empty quoted compatibility', skillFile('skill-a', 'compatibility: ""\n'), [/compatibility is empty/]],
+  ['compatibility as a mapping', skillFile('skill-a', 'compatibility:\n  git: required\n'), [/compatibility must be a string, not a nested mapping or list/]],
+  ['compatibility as a list', skillFile('skill-a', 'compatibility:\n  - git\n'), [/compatibility must be a string, not a nested mapping or list/]],
   ['non-standard field', skillFile('skill-a', 'disable-model-invocation: true\n'), [/non-standard frontmatter field "disable-model-invocation"/]],
   [
     'every standard field',

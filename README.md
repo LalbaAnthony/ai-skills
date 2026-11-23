@@ -122,7 +122,7 @@ ai-skills/
 ### Portability rules
 
 - Frontmatter: standard fields only (`name`, `description`, optional `license`, `compatibility`, `metadata`, `allowed-tools`). Agent-specific fields such as `disable-model-invocation` are ignored by other agents.
-- `name` = directory name: lowercase letters, digits and single hyphens, at most 64 characters. `description`: at most 1024 characters, saying what the skill does and when to use it, with the words that should trigger it.
+- `name` = directory name: lowercase letters, digits and single hyphens, at most 64 characters. `description`: at most 1024 characters, saying what the skill does and when to use it, with the words that should trigger it. `compatibility`, when present: a non-empty string of at most 500 characters.
 - Quote frontmatter values that contain `: ` or ` #`: strict YAML parsers reject them otherwise.
 - `license: MIT`, the license of this repository.
 - No agent-specific tool names in the body.

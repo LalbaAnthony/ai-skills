@@ -5,8 +5,9 @@
 //   unique name, "source": "./" and a non-empty "skills" array of "./skills/<name>" paths;
 // - every skill belongs to exactly one plugin;
 // - every listed skill has a skills/<name>/SKILL.md that is under 500 lines, whose frontmatter uses
-//   standard Agent Skills fields only, with "name" equal to the directory name and a non-empty
-//   "description" of at most 1024 characters;
+//   standard Agent Skills fields only, with "name" equal to the directory name, a non-empty
+//   "description" of at most 1024 characters and, when present, a "compatibility" string of 1 to
+//   500 characters;
 // - every entry of skills/ is a directory listed by a plugin;
 // - no other SKILL.md exists in the repository: `npx skills` scans the whole repository, so any
 //   other SKILL.md would be offered to users as an installable skill.
@@ -17,6 +18,7 @@ import { join } from 'node:path';
 const NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const NAME_MAX_LENGTH = 64;
 const DESCRIPTION_MAX_LENGTH = 1024;
+const COMPATIBILITY_MAX_LENGTH = 500;
 const SKILL_MAX_LINES = 500;
 const STANDARD_FIELDS = new Set(['name', 'description', 'license', 'compatibility', 'metadata', 'allowed-tools']);
 const SKILL_PATH = /^\.\/skills\/([^/]+)\/?$/;
@@ -224,6 +226,17 @@ function validateSkill(root, name, errors) {
     errors.push(`${path}: no "description" field`);
   } else if (description.length > DESCRIPTION_MAX_LENGTH) {
     errors.push(`${path}: description is ${description.length} characters, max ${DESCRIPTION_MAX_LENGTH}`);
+  }
+
+  if (fields.has('compatibility')) {
+    const compatibility = fields.get('compatibility');
+    if (typeof compatibility !== 'string') {
+      errors.push(`${path}: compatibility must be a string, not a nested mapping or list`);
+    } else if (compatibility === '') {
+      errors.push(`${path}: compatibility is empty, remove it or give it 1 to ${COMPATIBILITY_MAX_LENGTH} characters`);
+    } else if (compatibility.length > COMPATIBILITY_MAX_LENGTH) {
+      errors.push(`${path}: compatibility is ${compatibility.length} characters, max ${COMPATIBILITY_MAX_LENGTH}`);
+    }
   }
 }
 
