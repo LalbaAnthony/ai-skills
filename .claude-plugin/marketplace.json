@@ -7,14 +7,6 @@
     },
     "plugins": [
         {
-            "name": "version-control",
-            "description": "Git usage for coding agents",
-            "source": "./",
-            "skills": [
-                "./skills/git"
-            ]
-        },
-        {
             "name": "email",
             "description": "Reading and analyzing email files",
             "source": "./",
