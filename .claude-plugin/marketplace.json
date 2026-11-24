@@ -21,6 +21,14 @@
             "skills": [
                 "./skills/github-actions"
             ]
+        },
+        {
+            "name": "typescript",
+            "description": "TypeScript conventions for coding agents",
+            "source": "./",
+            "skills": [
+                "./skills/typescript-strict"
+            ]
         }
     ]
 }
