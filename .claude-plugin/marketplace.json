@@ -29,6 +29,14 @@
             "skills": [
                 "./skills/typescript-strict"
             ]
+        },
+        {
+            "name": "docker",
+            "description": "Docker and Docker Compose conventions for coding agents",
+            "source": "./",
+            "skills": [
+                "./skills/docker-project"
+            ]
         }
     ]
 }
