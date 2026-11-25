@@ -45,6 +45,14 @@
             "skills": [
                 "./skills/ui-affordance"
             ]
+        },
+        {
+            "name": "agents",
+            "description": "Agent instruction files (AGENTS.md, CLAUDE.md, GEMINI.md) for coding agents",
+            "source": "./",
+            "skills": [
+                "./skills/agent-instructions"
+            ]
         }
     ]
 }
