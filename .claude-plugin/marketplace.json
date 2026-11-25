@@ -37,6 +37,14 @@
             "skills": [
                 "./skills/docker-project"
             ]
+        },
+        {
+            "name": "frontend",
+            "description": "Frontend conventions for coding agents",
+            "source": "./",
+            "skills": [
+                "./skills/ui-affordance"
+            ]
         }
     ]
 }
