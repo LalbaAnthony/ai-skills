@@ -53,6 +53,14 @@
             "skills": [
                 "./skills/agent-instructions"
             ]
+        },
+        {
+            "name": "communication",
+            "description": "Status reports, delivery notes and handoffs written for clients, project managers and developers",
+            "source": "./",
+            "skills": [
+                "./skills/project-report"
+            ]
         }
     ]
 }
